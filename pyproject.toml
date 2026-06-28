@@ -1,0 +1,18 @@
+[project]
+name = "docu-sketch"
+version = "0.1.0"
+description = "Indoor object detection training notebook and dataset utilities"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "matplotlib>=3.8.0",
+    "pandas>=2.1.0",
+    "pillow>=10.0.0",
+    "ultralytics>=8.3.0",
+]
+
+[dependency-groups]
+dev = [
+    "ipykernel>=6.29.5",
+    "jupyterlab>=4.6.0",
+]
