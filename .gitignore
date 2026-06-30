@@ -17,3 +17,6 @@ Indoor Object Detection Dataset/
 data/
 runs/
 *.pt
+logs/
+mlflow.db
+.pytest_cache/

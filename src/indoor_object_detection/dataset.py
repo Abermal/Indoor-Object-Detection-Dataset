@@ -1,3 +1,5 @@
+"""Download, parse, split, summarize, and export the indoor dataset."""
+
 from __future__ import annotations
 
 import random
@@ -6,11 +8,16 @@ import urllib.request
 import zipfile
 from collections import Counter
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
-from typing import Iterable
+from typing import TYPE_CHECKING, Final, Iterable, Mapping
 from xml.etree import ElementTree as ET
 
-CLASSES = [
+if TYPE_CHECKING:
+    from pandas import DataFrame
+
+
+CLASSES: Final[tuple[str, ...]] = (
     "chair",
     "clock",
     "exit",
@@ -18,16 +25,29 @@ CLASSES = [
     "printer",
     "screen",
     "trashbin",
-]
+)
 
-ZENODO_DOWNLOAD_URL = (
+ZENODO_DOWNLOAD_URL: Final[str] = (
     "https://zenodo.org/api/records/2654485/files/"
     "Indoor%20Object%20Detection%20Dataset.zip/content"
 )
 
 
+class DatasetSplit(StrEnum):
+    """Supported dataset partitions and their serialized directory names."""
+
+    TRAIN = "train"
+    VAL = "val"
+    TEST = "test"
+
+
+DATASET_SPLITS: Final[tuple[DatasetSplit, ...]] = tuple(DatasetSplit)
+
+
 @dataclass(frozen=True)
 class ObjectBox:
+    """A labelled object bounding box in absolute pixel coordinates."""
+
     label: str
     x1: float
     y1: float
@@ -37,12 +57,15 @@ class ObjectBox:
 
 @dataclass(frozen=True)
 class ImageRecord:
+    """An annotated image and its source sequence."""
+
     image_path: Path
     sequence: str
     boxes: tuple[ObjectBox, ...]
 
     @property
     def labels(self) -> set[str]:
+        """Return the distinct class labels attached to the image."""
         return {box.label for box in self.boxes}
 
 
@@ -79,7 +102,9 @@ def download_dataset(destination: str | Path = ".") -> Path:
 
     dataset_root = find_dataset_root(destination)
     if dataset_root is None:
-        raise FileNotFoundError("Dataset archive extracted, but the dataset root was not found.")
+        raise FileNotFoundError(
+            "Dataset archive extracted, but the dataset root was not found."
+        )
     return dataset_root
 
 
@@ -113,20 +138,33 @@ def parse_dlib_annotations(dataset_root: str | Path) -> list[ImageRecord]:
                 boxes.append(ObjectBox(label, left, top, left + width, top + height))
             records.append(ImageRecord(image_dir / filename, sequence_id, tuple(boxes)))
 
-    missing = [record.image_path for record in records if not record.image_path.exists()]
+    missing = [
+        record.image_path for record in records if not record.image_path.exists()
+    ]
     if missing:
-        raise FileNotFoundError(f"Missing {len(missing)} image files, first: {missing[0]}")
+        raise FileNotFoundError(
+            f"Missing {len(missing)} image files, first: {missing[0]}"
+        )
     return records
 
 
-def _split_sizes(total: int, ratios: tuple[float, float, float]) -> dict[str, int]:
+def _split_sizes(
+    total: int,
+    ratios: tuple[float, float, float],
+) -> dict[DatasetSplit, int]:
+    """Convert split ratios into image counts that sum to ``total``."""
     train = round(total * ratios[0])
     val = round(total * ratios[1])
     test = total - train - val
-    return {"train": train, "val": val, "test": test}
+    return {
+        DatasetSplit.TRAIN: train,
+        DatasetSplit.VAL: val,
+        DatasetSplit.TEST: test,
+    }
 
 
 def _split_has_all_classes(split_records: Iterable[ImageRecord]) -> bool:
+    """Return whether records collectively contain every supported class."""
     labels = set()
     for record in split_records:
         labels.update(record.labels)
@@ -139,41 +177,52 @@ def make_splits(
     seed: int = 42,
     max_attempts: int = 2000,
     temporal_block_size: int = 10,
-) -> dict[str, list[ImageRecord]]:
+) -> dict[DatasetSplit, list[ImageRecord]]:
     """Create a block-aware 80/10/10 split with every class in each split."""
-    if len(ratios) != 3 or abs(sum(ratios) - 1.0) > 1e-8:
-        raise ValueError("ratios must contain three values summing to 1.0")
+    if len(ratios) != len(DATASET_SPLITS) or any(ratio <= 0 for ratio in ratios):
+        raise ValueError("ratios must contain three positive values")
+    if abs(sum(ratios) - 1.0) > 1e-8:
+        raise ValueError("ratios must sum to 1.0")
     if temporal_block_size < 1:
         raise ValueError("temporal_block_size must be at least 1")
 
-    split_names = ["train", "val", "test"]
     target_sizes = _split_sizes(len(records), ratios)
+    if any(size == 0 for size in target_sizes.values()):
+        raise ValueError(
+            "records and ratios must allocate at least one image to every split"
+        )
     grouped_records: dict[tuple[str, int], list[ImageRecord]] = {}
     for record in records:
         frame_number = int(record.image_path.stem.rsplit("_", 1)[1])
         group_key = (record.sequence, (frame_number - 1) // temporal_block_size)
         grouped_records.setdefault(group_key, []).append(record)
     base_groups = list(grouped_records.values())
-    best_valid: tuple[int, dict[str, list[ImageRecord]]] | None = None
+    best_valid: tuple[int, dict[DatasetSplit, list[ImageRecord]]] | None = None
 
     for attempt in range(max_attempts):
         rng = random.Random(seed + attempt)
         groups = list(base_groups)
         rng.shuffle(groups)
-        splits: dict[str, list[ImageRecord]] = {name: [] for name in split_names}
+        splits: dict[DatasetSplit, list[ImageRecord]] = {
+            split: [] for split in DATASET_SPLITS
+        }
 
         for group in groups:
-            def assignment_score(split: str) -> float:
+            def assignment_score(split: DatasetSplit) -> float:
+                """Score a split by target deficit while penalizing overflow."""
                 remaining = target_sizes[split] - len(splits[split])
                 relative_need = remaining / target_sizes[split]
                 overflow = max(0, len(group) - remaining)
                 return relative_need - (overflow * 10) + (rng.random() * 1e-6)
 
-            selected_split = max(split_names, key=assignment_score)
+            selected_split = max(DATASET_SPLITS, key=assignment_score)
             splits[selected_split].extend(group)
 
-        if all(_split_has_all_classes(splits[split]) for split in split_names):
-            size_error = sum(abs(len(splits[name]) - target_sizes[name]) for name in split_names)
+        if all(_split_has_all_classes(splits[split]) for split in DATASET_SPLITS):
+            size_error = sum(
+                abs(len(splits[split]) - target_sizes[split])
+                for split in DATASET_SPLITS
+            )
             if best_valid is None or size_error < best_valid[0]:
                 best_valid = (size_error, splits)
             if size_error == 0:
@@ -181,16 +230,24 @@ def make_splits(
 
     if best_valid is not None:
         return best_valid[1]
-    raise RuntimeError("Could not build a temporal split containing every class in train/val/test.")
+    raise RuntimeError(
+        "Could not build a temporal split containing every class in train/val/test."
+    )
 
 
-def summarize_splits(splits: dict[str, list[ImageRecord]]):
+def summarize_splits(
+    splits: Mapping[DatasetSplit, list[ImageRecord]],
+) -> "DataFrame":
     """Return image and object counts per split as a pandas DataFrame."""
     import pandas as pd
 
     rows = []
     for split, records in splits.items():
-        row = {"split": split, "images": len(records), "boxes": sum(len(r.boxes) for r in records)}
+        row = {
+            "split": split,
+            "images": len(records),
+            "boxes": sum(len(record.boxes) for record in records),
+        }
         class_counts = Counter(box.label for record in records for box in record.boxes)
         row.update({label: class_counts[label] for label in CLASSES})
         rows.append(row)
@@ -198,6 +255,7 @@ def summarize_splits(splits: dict[str, list[ImageRecord]]):
 
 
 def _yolo_line(box: ObjectBox, image_width: int, image_height: int) -> str:
+    """Serialize one bounding box in normalized YOLO label format."""
     x1 = max(0.0, min(float(image_width), box.x1))
     y1 = max(0.0, min(float(image_height), box.y1))
     x2 = max(0.0, min(float(image_width), box.x2))
@@ -253,7 +311,7 @@ def _jpeg_size(image_path: Path) -> tuple[int, int]:
 
 
 def write_yolo_dataset(
-    splits: dict[str, list[ImageRecord]],
+    splits: Mapping[DatasetSplit, list[ImageRecord]],
     output_dir: str | Path = "data/indoor_yolo",
     overwrite: bool = True,
 ) -> Path:
@@ -263,7 +321,8 @@ def write_yolo_dataset(
         shutil.rmtree(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    for split, records in splits.items():
+    for raw_split, records in splits.items():
+        split = DatasetSplit(raw_split)
         image_out = output_dir / "images" / split
         label_out = output_dir / "labels" / split
         image_out.mkdir(parents=True, exist_ok=True)
@@ -281,19 +340,13 @@ def write_yolo_dataset(
                 encoding="utf-8",
             )
 
-    data_yaml = {
-        "path": str(output_dir.resolve()),
-        "train": "images/train",
-        "val": "images/val",
-        "test": "images/test",
-        "names": {idx: name for idx, name in enumerate(CLASSES)},
+    split_paths = {
+        split: (Path("images") / split).as_posix() for split in DATASET_SPLITS
     }
     yaml_text = "\n".join(
         [
-            f"path: {data_yaml['path']}",
-            "train: images/train",
-            "val: images/val",
-            "test: images/test",
+            f"path: {output_dir.resolve()}",
+            *[f"{split}: {split_paths[split]}" for split in DATASET_SPLITS],
             "names:",
             *[f"  {idx}: {name}" for idx, name in enumerate(CLASSES)],
             "",

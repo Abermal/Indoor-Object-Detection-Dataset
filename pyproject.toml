@@ -1,18 +1,66 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
 [project]
-name = "docu-sketch"
+name = "indoor-object-detection"
 version = "0.1.0"
 description = "Indoor object detection training notebook and dataset utilities"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
     "matplotlib>=3.8.0",
+    "mlflow>=3.1.0",
     "pandas>=2.1.0",
     "pillow>=10.0.0",
+    "torch",
+    "torchvision",
     "ultralytics>=8.3.0",
 ]
+
+[project.scripts]
+train-indoor-detector = "indoor_object_detection.train:main"
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu126" }
+torchvision = { index = "pytorch-cu126" }
+
+[[tool.uv.index]]
+name = "pytorch-cu126"
+url = "https://download.pytorch.org/whl/cu126"
+explicit = true
 
 [dependency-groups]
 dev = [
     "ipykernel>=6.29.5",
     "jupyterlab>=4.6.0",
+    "pytest>=8.0.0",
 ]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+files = ["src", "tests"]
+
+[[tool.mypy.overrides]]
+module = ["mlflow", "pandas", "ultralytics", "ultralytics.*"]
+ignore_missing_imports = true
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "D"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["D"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+indoor_object_detection = ["py.typed"]

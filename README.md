@@ -36,7 +36,7 @@ Class instance counts:
 
 ## Public Implementation Check
 
-I searched for existing MMDetection implementations and reusable loaders using queries around `Indoor Object Detection Dataset`, `TUT Indoor Object Detection Dataset`, `mmdetection`, `mmdet`, `github`, and annotation filenames such as `annotation_s1.xml`. I did not find a maintained MMDetection dataset config or a reusable open-source data loader for this exact dataset. The notebook therefore uses a small local loader/converter in `docu_sketch/indoor_dataset.py`.
+I searched for existing MMDetection implementations and reusable loaders using queries around `Indoor Object Detection Dataset`, `TUT Indoor Object Detection Dataset`, `mmdetection`, `mmdet`, `github`, and annotation filenames such as `annotation_s1.xml`. I did not find a maintained MMDetection dataset config or a reusable open-source data loader for this exact dataset. The notebook therefore uses a small local loader/converter in `src/indoor_object_detection/dataset.py`.
 
 ## Approach
 
@@ -55,12 +55,35 @@ uv sync
 uv run jupyter lab
 ```
 
+Run tests and a tracked command-line training job with:
+
+```bash
+uv run pytest -v
+uv run train-indoor-detector --epochs 30 --device 0
+uv run mlflow ui --backend-store-uri sqlite:///mlflow.db
+```
+
+Source functions and data models are fully annotated, public APIs include
+docstrings, and the package publishes a `py.typed` marker. Enforce both contracts
+before committing:
+
+```bash
+uvx mypy
+uvx ruff check .
+```
+
+For a CPU smoke run, reduce the workload with `--epochs 1 --image-size 320
+--batch-size 8 --device cpu`. Training metrics and artifacts are written both to
+`runs/detect/indoor_yolo_mlflow/` and the local MLflow store.
+
 For Colab, relying on `uv` is unnecessary friction because Colab users expect notebook-local `pip` installation. The notebook therefore runs `pip install -e .` from its setup cell and does not require `uv`.
 
 ## Main Files
 
+- `src/indoor_object_detection/`: installable Python package using the standard `src` layout.
 - `indoor_object_detection_yolo.ipynb`: end-to-end notebook for download, conversion, training, validation metrics, and visual examples.
-- `docu_sketch/indoor_dataset.py`: dataset download, dlib XML parsing, temporal-block split creation, split summary, and YOLO export utilities.
+- `src/indoor_object_detection/dataset.py`: dataset download, dlib XML parsing, temporal-block split creation, split summary, and YOLO export utilities.
+- `src/indoor_object_detection/train.py`: command-line training using Ultralytics' native MLflow parameter, validation-metric, and artifact logging.
 - `pyproject.toml`: package metadata and local dependencies.
 
 ## Expected Outputs

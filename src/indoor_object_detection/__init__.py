@@ -1,8 +1,12 @@
-"""Utilities for the Indoor Object Detection Dataset notebook."""
+"""Utilities for training on the Indoor Object Detection Dataset."""
 
-from .indoor_dataset import (
+from .dataset import (
     CLASSES,
+    DATASET_SPLITS,
     ZENODO_DOWNLOAD_URL,
+    DatasetSplit,
+    ImageRecord,
+    ObjectBox,
     download_dataset,
     ensure_dataset,
     find_dataset_root,
@@ -14,7 +18,11 @@ from .indoor_dataset import (
 
 __all__ = [
     "CLASSES",
+    "DATASET_SPLITS",
     "ZENODO_DOWNLOAD_URL",
+    "DatasetSplit",
+    "ImageRecord",
+    "ObjectBox",
     "download_dataset",
     "ensure_dataset",
     "find_dataset_root",
