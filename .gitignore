@@ -19,4 +19,5 @@ runs/
 *.pt
 logs/
 mlflow.db
+mlruns/
 .pytest_cache/
