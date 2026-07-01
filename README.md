@@ -34,10 +34,6 @@ Class instance counts:
 | screen | 115 |
 | trashbin | 228 |
 
-## Public Implementation Check
-
-I searched for existing MMDetection implementations and reusable loaders using queries around `Indoor Object Detection Dataset`, `TUT Indoor Object Detection Dataset`, `mmdetection`, `mmdet`, `github`, and annotation filenames such as `annotation_s1.xml`. I did not find a maintained MMDetection dataset config or a reusable open-source data loader for this exact dataset. The notebook therefore uses a small local loader/converter in `src/indoor_object_detection/dataset.py`.
-
 ## Approach
 
 The notebook uses Ultralytics YOLO, a practical recent detector family with a compact API, pretrained weights, built-in mAP reporting, and straightforward Colab installation. The helper package parses dlib XML annotations, builds a deterministic 80/10/10 split while enforcing every class in each split, converts data to YOLO format, and writes `data.yaml`.
