@@ -8,6 +8,8 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+from ultralytics import YOLO, settings
+
 from indoor_object_detection import (
     DatasetSplit,
     ensure_dataset,
@@ -42,9 +44,9 @@ class TrainingConfig:
 def parse_args() -> TrainingConfig:
     """Parse command-line arguments into a statically typed configuration."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--model", default="yolo11n.pt", help="model weights")
-    parser.add_argument("--epochs", type=int, default=30, help="training epochs")
-    parser.add_argument("--image-size", type=int, default=640, help="input size")
+    parser.add_argument("--model", default="yolo26n.pt", help="model weights")
+    parser.add_argument("--epochs", type=int, default=50, help="training epochs")
+    parser.add_argument("--image-size", type=int, default=1280, help="input size")
     parser.add_argument("--batch-size", type=int, default=16, help="batch size")
     parser.add_argument("--device", default="cpu", help="CPU, GPU, or device ID")
     parser.add_argument("--workers", type=int, default=0, help="data workers")
@@ -100,8 +102,6 @@ def main() -> None:
         format="%(asctime)s | %(levelname)s | %(message)s",
     )
 
-    from ultralytics import YOLO, settings
-
     data_yaml = prepare_dataset(args)
     os.environ["MLFLOW_TRACKING_URI"] = args.tracking_uri
     os.environ["MLFLOW_EXPERIMENT_NAME"] = args.experiment_name
@@ -119,7 +119,9 @@ def main() -> None:
         seed=args.seed,
         project=str(args.project),
         name=args.run_name,
+        save_period=2,
         exist_ok=True,
+        rect=True,
     )
 
     save_dir = Path(model.trainer.save_dir)
