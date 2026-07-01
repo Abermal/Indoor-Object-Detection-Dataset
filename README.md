@@ -44,7 +44,7 @@ The notebook uses Ultralytics YOLO, a practical recent detector family with a co
 
 Because the images are consecutive video frames, a naive image-level random split would leak near-duplicate frames across train and validation. The splitter therefore keeps each 5-frame group together while searching for the requested split sizes and class coverage.
 
-The package-first approach is feasible for this assignment. It keeps reusable parsing/splitting/conversion logic out of the notebook while still letting a reviewer run everything by executing notebook cells. The setup cell clones this repository automatically when it is opened directly in Colab, then installs the project in editable mode (`pip install -e .`).
+The package-first approach is feasible for this assignment. It keeps reusable parsing/splitting/conversion logic out of the notebook while still letting a reviewer run everything by executing notebook cells. The setup cell clones this repository automatically when it is opened directly in Colab, then installs the project in editable mode (`pip install -e .`). The repository must be public: Colab's GitHub integration can open a notebook from a private repository, but it does not pass those GitHub credentials to `git clone` inside the runtime.
 
 ## Environment Notes
 
