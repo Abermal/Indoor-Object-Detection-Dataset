@@ -42,7 +42,7 @@ I searched for existing MMDetection implementations and reusable loaders using q
 
 The notebook uses Ultralytics YOLO, a practical recent detector family with a compact API, pretrained weights, built-in mAP reporting, and straightforward Colab installation. The helper package parses dlib XML annotations, builds a deterministic 80/10/10 split while enforcing every class in each split, converts data to YOLO format, and writes `data.yaml`.
 
-Because the images are consecutive video frames, a naive image-level random split would leak near-duplicate frames across train and validation. The splitter therefore keeps each 10-frame temporal block together while searching for the requested split sizes and class coverage.
+Because the images are consecutive video frames, a naive image-level random split would leak near-duplicate frames across train and validation. The splitter therefore keeps each 5-frame group together while searching for the requested split sizes and class coverage.
 
 The package-first approach is feasible for this assignment. It keeps reusable parsing/splitting/conversion logic out of the notebook while still letting a reviewer run everything by executing notebook cells. The setup cell clones this repository automatically when it is opened directly in Colab, then installs the project in editable mode (`pip install -e .`).
 

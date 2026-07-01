@@ -20,6 +20,14 @@ def _record(frame: int) -> ImageRecord:
     return ImageRecord(Path(f"frame_{frame}.jpg"), "1", boxes)
 
 
+def _record_with_label(frame: int, label: str) -> ImageRecord:
+    return ImageRecord(
+        Path(f"frame_{frame}.jpg"),
+        "1",
+        (ObjectBox(label, 0, 0, 10, 10),),
+    )
+
+
 def test_dataset_splits_are_string_enums() -> None:
     assert DATASET_SPLITS == (
         DatasetSplit.TRAIN,
@@ -53,6 +61,32 @@ def test_make_splits_returns_enum_keys_and_preserves_blocks() -> None:
         assert assigned_split[Path(f"frame_{first_frame}.jpg")] == assigned_split[
             Path(f"frame_{first_frame + 1}.jpg")
         ]
+
+
+def test_make_splits_balances_class_distribution() -> None:
+    records = [
+        _record_with_label(frame, label)
+        for frame, label in enumerate(CLASSES * 10, start=1)
+    ]
+
+    splits = make_splits(
+        records,
+        ratios=(0.6, 0.2, 0.2),
+        temporal_block_size=1,
+        max_attempts=100,
+    )
+
+    expected_per_class = {
+        DatasetSplit.TRAIN: 6,
+        DatasetSplit.VAL: 2,
+        DatasetSplit.TEST: 2,
+    }
+    for split, split_records in splits.items():
+        class_counts = {
+            label: sum(label in record.labels for record in split_records)
+            for label in CLASSES
+        }
+        assert set(class_counts.values()) == {expected_per_class[split]}
 
 
 @pytest.mark.parametrize(

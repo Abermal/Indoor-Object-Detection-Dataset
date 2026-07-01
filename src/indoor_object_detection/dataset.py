@@ -176,9 +176,32 @@ def make_splits(
     ratios: tuple[float, float, float] = (0.8, 0.1, 0.1),
     seed: int = 42,
     max_attempts: int = 2000,
-    temporal_block_size: int = 10,
+    temporal_block_size: int = 5,
 ) -> dict[DatasetSplit, list[ImageRecord]]:
-    """Create a block-aware 80/10/10 split with every class in each split."""
+    """Divide annotated images into training, validation, and test sets.
+
+    Consecutive images from the same recorded sequence are often nearly
+    identical. Putting them in different sets could make test results look
+    better than they really are, so this function keeps each group of
+    consecutive images in one set. It tries several random group assignments
+    and returns the one closest to the requested proportions that also includes
+    every supported object class in every set. Among assignments with equally
+    accurate set sizes, it prefers the one whose bounding-box counts for each
+    class are closest to those proportions.
+
+    Args:
+        records: Annotated images to divide. Each item contains the image file
+            path, the recorded sequence it came from, and its labelled object
+            bounding boxes.
+        ratios: Fractions of the images requested for the training, validation,
+            and test sets, in that order. The three values must sum to ``1.0``.
+        seed: Starting value for the random assignment. Using the same value
+            with the same inputs produces the same result.
+        max_attempts: Maximum number of random assignments to try while looking
+            for one that places every object class in every set.
+        temporal_block_size: Number of consecutive images from a recorded
+            sequence that must stay together in the same set.
+    """
     if len(ratios) != len(DATASET_SPLITS) or any(ratio <= 0 for ratio in ratios):
         raise ValueError("ratios must contain three positive values")
     if abs(sum(ratios) - 1.0) > 1e-8:
@@ -191,14 +214,33 @@ def make_splits(
         raise ValueError(
             "records and ratios must allocate at least one image to every split"
         )
+
+    # Each class should have approximately the requested fraction of its boxes
+    # in each set, not merely be present there at least once.
+    total_class_counts = Counter(
+        box.label for record in records for box in record.boxes
+    )
+    target_class_counts = {
+        split: {
+            label: total_class_counts[label] * ratio for label in CLASSES
+        }
+        for split, ratio in zip(DATASET_SPLITS, ratios, strict=True)
+    }
+
+    # The numeric suffix in each image filename is its position in a recorded
+    # sequence. Grouping adjacent numbers keeps near-identical images together.
     grouped_records: dict[tuple[str, int], list[ImageRecord]] = {}
     for record in records:
         frame_number = int(record.image_path.stem.rsplit("_", 1)[1])
         group_key = (record.sequence, (frame_number - 1) // temporal_block_size)
         grouped_records.setdefault(group_key, []).append(record)
     base_groups = list(grouped_records.values())
-    best_valid: tuple[int, dict[DatasetSplit, list[ImageRecord]]] | None = None
+    best_valid: tuple[
+        tuple[int, float], dict[DatasetSplit, list[ImageRecord]]
+    ] | None = None
 
+    # Different shuffles can produce different results because whole groups,
+    # rather than individual images, must be assigned as indivisible units.
     for attempt in range(max_attempts):
         rng = random.Random(seed + attempt)
         groups = list(base_groups)
@@ -206,26 +248,75 @@ def make_splits(
         splits: dict[DatasetSplit, list[ImageRecord]] = {
             split: [] for split in DATASET_SPLITS
         }
+        split_class_counts: dict[DatasetSplit, Counter[str]] = {
+            split: Counter() for split in DATASET_SPLITS
+        }
 
         for group in groups:
+            group_class_counts = Counter(
+                box.label for record in group for box in record.boxes
+            )
+
             def assignment_score(split: DatasetSplit) -> float:
-                """Score a split by target deficit while penalizing overflow."""
+                """Return how useful it is to place the current group in a set.
+
+                A set scores higher when it still needs images and boxes of the
+                classes found in this group. Exceeding either the requested set
+                size or a class's requested box count receives a large penalty.
+                A tiny random tie-breaker lets later attempts explore equivalent
+                assignments while remaining reproducible from ``seed``.
+                """
                 remaining = target_sizes[split] - len(splits[split])
-                relative_need = remaining / target_sizes[split]
-                overflow = max(0, len(group) - remaining)
-                return relative_need - (overflow * 10) + (rng.random() * 1e-6)
+                image_need = remaining / target_sizes[split]
+                image_overflow = max(0, len(group) - remaining)
+
+                class_need = 0.0
+                class_overflow = 0.0
+                boxes_in_group = sum(group_class_counts.values())
+                for label, count in group_class_counts.items():
+                    target = target_class_counts[split][label]
+                    if target == 0:
+                        continue
+                    remaining_for_class = target - split_class_counts[split][label]
+                    class_need += count * (remaining_for_class / target)
+                    class_overflow += max(0.0, count - remaining_for_class) / target
+                if boxes_in_group:
+                    class_need /= boxes_in_group
+
+                return (
+                    image_need
+                    + class_need
+                    - (image_overflow * 10)
+                    - (class_overflow * 10)
+                    + (rng.random() * 1e-6)
+                )
 
             selected_split = max(DATASET_SPLITS, key=assignment_score)
             splits[selected_split].extend(group)
+            split_class_counts[selected_split].update(group_class_counts)
 
         if all(_split_has_all_classes(splits[split]) for split in DATASET_SPLITS):
             size_error = sum(
                 abs(len(splits[split]) - target_sizes[split])
                 for split in DATASET_SPLITS
             )
-            if best_valid is None or size_error < best_valid[0]:
-                best_valid = (size_error, splits)
-            if size_error == 0:
+            class_error = sum(
+                abs(
+                    split_class_counts[split][label]
+                    - target_class_counts[split][label]
+                )
+                / total_class_counts[label]
+                for split in DATASET_SPLITS
+                for label in CLASSES
+                if total_class_counts[label]
+            )
+            quality = (size_error, class_error)
+
+            # Set size is the primary requirement; class balance breaks ties
+            # between assignments with the same size error.
+            if best_valid is None or quality < best_valid[0]:
+                best_valid = (quality, splits)
+            if quality == (0, 0.0):
                 return splits
 
     if best_valid is not None:
