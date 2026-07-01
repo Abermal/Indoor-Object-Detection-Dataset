@@ -119,7 +119,6 @@ def main() -> None:
         seed=args.seed,
         project=str(args.project),
         name=args.run_name,
-        save_period=2,
         exist_ok=True,
         rect=True,
     )
