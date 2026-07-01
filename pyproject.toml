@@ -20,6 +20,7 @@ dependencies = [
 
 [project.scripts]
 train-indoor-detector = "indoor_object_detection.train:main"
+evaluate-indoor-detector = "indoor_object_detection.evaluate:main"
 
 [tool.uv.sources]
 torch = { index = "pytorch-cu126" }

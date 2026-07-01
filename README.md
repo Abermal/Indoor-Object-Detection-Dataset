@@ -63,6 +63,16 @@ uv run train-indoor-detector --epochs 30 --device 0
 uv run mlflow ui --backend-store-uri sqlite:///mlflow.db
 ```
 
+After training, evaluate the selected checkpoint on the held-out test split:
+
+```powershell
+uv run evaluate-indoor-detector mlruns/1/<run-id>/artifacts/weights/best.pt --device 0
+```
+
+The command writes aggregate and per-class metrics, per-image precision/recall/IoU
+scores, best/worst annotated examples, and Ultralytics confusion-matrix plots to
+`runs/detect/indoor_yolo_test/`. The checkpoint argument also accepts a `file:` URI.
+
 Source functions and data models are fully annotated, public APIs include
 docstrings, and the package publishes a `py.typed` marker. Enforce both contracts
 before committing:
