@@ -34,6 +34,55 @@ Class instance counts:
 | screen | 115 |
 | trashbin | 228 |
 
+Per-sequence class distribution (counts are annotated bounding boxes):
+
+| Sequence | Images | Dataset share | chair | clock | exit | fireextinguisher | printer | screen | trashbin | Total boxes |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| sequence_1 | 148 | 6.69% | 82 | 31 | 67 | 57 | 0 | 0 | 4 | 241 |
+| sequence_2 | 217 | 9.81% | 127 | 25 | 59 | 53 | 23 | 8 | 51 | 346 |
+| sequence_3 | 1,154 | 52.15% | 1,302 | 80 | 156 | 965 | 57 | 11 | 114 | 2,685 |
+| sequence_4 | 278 | 12.56% | 66 | 41 | 52 | 183 | 0 | 52 | 44 | 438 |
+| sequence_5 | 229 | 10.35% | 26 | 16 | 76 | 309 | 0 | 32 | 7 | 466 |
+| sequence_6 | 187 | 8.45% | 59 | 87 | 135 | 117 | 1 | 12 | 8 | 419 |
+| **Full dataset** | **2,213** | **100.00%** | **1,662** | **280** | **545** | **1,684** | **81** | **115** | **228** | **4,595** |
+
+Normalized per-sequence class distribution (each class is a percentage of all
+bounding boxes in that sequence). Percentages use largest-remainder rounding so
+each row totals exactly 100.00%:
+
+| Sequence | Images | Dataset share | chair | clock | exit | fireextinguisher | printer | screen | trashbin |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| sequence_1 | 148 | 6.69% | 34.03% | 12.86% | 27.80% | 23.65% | 0.00% | 0.00% | 1.66% |
+| sequence_2 | 217 | 9.81% | 36.70% | 7.23% | 17.05% | 15.32% | 6.65% | 2.31% | 14.74% |
+| sequence_3 | 1,154 | 52.15% | 48.49% | 2.98% | 5.81% | 35.94% | 2.12% | 0.41% | 4.25% |
+| sequence_4 | 278 | 12.56% | 15.07% | 9.36% | 11.87% | 41.78% | 0.00% | 11.87% | 10.05% |
+| sequence_5 | 229 | 10.35% | 5.58% | 3.43% | 16.31% | 66.31% | 0.00% | 6.87% | 1.50% |
+| sequence_6 | 187 | 8.45% | 14.08% | 20.76% | 32.22% | 27.92% | 0.24% | 2.87% | 1.91% |
+| **Full dataset** | **2,213** | **100.00%** | **36.17%** | **6.10%** | **11.86%** | **36.65%** | **1.76%** | **2.50%** | **4.96%** |
+
+Distribution of each sequence across the exported YOLO splits (parentheses
+show the percentage of that sequence assigned to the split):
+
+| Sequence | Train | Validation | Test | Total |
+| --- | ---: | ---: | ---: | ---: |
+| sequence_1 | 128 (86.49%) | 10 (6.76%) | 10 (6.76%) | 148 |
+| sequence_2 | 172 (79.26%) | 25 (11.52%) | 20 (9.22%) | 217 |
+| sequence_3 | 935 (81.02%) | 94 (8.15%) | 125 (10.83%) | 1,154 |
+| sequence_4 | 216 (77.70%) | 42 (15.11%) | 20 (7.19%) | 278 |
+| sequence_5 | 179 (78.17%) | 30 (13.10%) | 20 (8.73%) | 229 |
+| sequence_6 | 140 (74.87%) | 20 (10.70%) | 27 (14.44%) | 187 |
+| **All sequences** | **1,770 (79.98%)** | **221 (9.99%)** | **222 (10.03%)** | **2,213** |
+
+Normalized class distribution within each exported YOLO split (each class is a
+percentage of all bounding boxes in that split):
+
+| Split | Boxes | chair | clock | exit | fireextinguisher | printer | screen | trashbin |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Train | 3,716 | 36.09% | 6.08% | 11.84% | 36.73% | 1.75% | 2.53% | 4.98% |
+| Validation | 449 | 37.19% | 5.79% | 11.81% | 36.30% | 1.78% | 2.23% | 4.90% |
+| Test | 430 | 35.82% | 6.51% | 12.09% | 36.28% | 1.86% | 2.56% | 4.88% |
+| **Full dataset** | **4,595** | **36.17%** | **6.10%** | **11.86%** | **36.65%** | **1.76%** | **2.50%** | **4.96%** |
+
 ## Approach
 
 The notebook uses Ultralytics YOLO, a practical recent detector family with a compact API, pretrained weights, built-in mAP reporting, and straightforward Colab installation. The helper package parses dlib XML annotations, builds a deterministic 80/10/10 split while enforcing every class in each split, converts data to YOLO format, and writes `data.yaml`.
