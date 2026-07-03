@@ -11,12 +11,14 @@ from pathlib import Path
 from ultralytics import YOLO, settings
 
 from indoor_object_detection import (
-    DatasetSplit,
+    CLASSES,
     ensure_dataset,
     make_splits,
     parse_dlib_annotations,
+    summarize_splits,
     write_yolo_dataset,
 )
+from indoor_object_detection.evaluate import evaluate
 
 LOGGER = logging.getLogger(__name__)
 
@@ -45,11 +47,11 @@ def parse_args() -> TrainingConfig:
     """Parse command-line arguments into a statically typed configuration."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model", default="yolo26n.pt", help="model weights")
-    parser.add_argument("--epochs", type=int, default=50, help="training epochs")
+    parser.add_argument("--epochs", type=int, default=100, help="training epochs")
     parser.add_argument("--image-size", type=int, default=1280, help="input size")
     parser.add_argument("--batch-size", type=int, default=16, help="batch size")
     parser.add_argument("--device", default="cpu", help="CPU, GPU, or device ID")
-    parser.add_argument("--workers", type=int, default=0, help="data workers")
+    parser.add_argument("--workers", type=int, default=8, help="data workers")
     parser.add_argument("--seed", type=int, default=42, help="random seed")
     parser.add_argument(
         "--dataset-root", type=Path, default=Path("."), help="dataset search root"
@@ -61,7 +63,7 @@ def parse_args() -> TrainingConfig:
         help="prepared YOLO dataset directory",
     )
     parser.add_argument(
-        "--project", type=Path, default=Path("runs/detect"), help="output root"
+        "--project", type=Path, default=Path("runs"), help="output root"
     )
     parser.add_argument("--run-name", default="indoor_yolo_mlflow", help="run name")
     parser.add_argument(
@@ -88,9 +90,13 @@ def prepare_dataset(args: TrainingConfig) -> Path:
     dataset_root = ensure_dataset(args.dataset_root)
     LOGGER.info("Parsing annotations from %s", dataset_root)
     records = parse_dlib_annotations(dataset_root)
-    splits = make_splits(records, seed=args.seed)
-    for split in DatasetSplit:
-        LOGGER.info("%s images: %d", split, len(splits[split]))
+    splits = make_splits(records, seed=args.seed, temporal_block_size=20)
+    distribution = summarize_splits(splits, norm=True)
+
+    LOGGER.info(
+        "Split image and class distribution (percentage of boxes):\n%s",
+        distribution.to_string(),
+    )
     return write_yolo_dataset(splits, args.yolo_dir) / "data.yaml"
 
 
@@ -125,6 +131,21 @@ def main() -> None:
 
     save_dir = Path(model.trainer.save_dir)
     LOGGER.info("Training completed; artifacts: %s", save_dir.resolve())
+
+    evaluation_dir = save_dir / "test"
+    evaluate(
+        weights=save_dir / "weights" / "best.pt",
+        data_yaml=data_yaml,
+        output_dir=evaluation_dir,
+        image_size=args.image_size,
+        batch_size=args.batch_size,
+        workers=args.workers,
+        device=args.device,
+        confidence=0.25,
+        nms_iou=0.5,
+        match_iou=0.5,
+        examples=9,
+    )
 
 
 if __name__ == "__main__":
