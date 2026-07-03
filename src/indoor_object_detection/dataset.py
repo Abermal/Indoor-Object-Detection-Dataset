@@ -327,7 +327,7 @@ def make_splits(
 
 
 def summarize_splits(
-    splits: Mapping[DatasetSplit, list[ImageRecord]],
+    splits: Mapping[DatasetSplit, list[ImageRecord]], norm : bool = False,
 ) -> "DataFrame":
     """Return image and object counts per split as a pandas DataFrame."""
     import pandas as pd
@@ -342,7 +342,21 @@ def summarize_splits(
         class_counts = Counter(box.label for record in records for box in record.boxes)
         row.update({label: class_counts[label] for label in CLASSES})
         rows.append(row)
-    return pd.DataFrame(rows).set_index("split")
+
+    distribution = pd.DataFrame(rows).set_index("split")
+    if norm:
+        class_columns = list(CLASSES)
+        distribution[class_columns] = (
+            distribution[class_columns]
+            .div(distribution["boxes"].replace(0, 1), axis=0)
+            .mul(100)
+            .round(2)
+        )
+        distribution = distribution.rename(
+            columns={class_name: f"{class_name}_%" for class_name in CLASSES}
+        )
+    return distribution
+
 
 
 def _yolo_line(box: ObjectBox, image_width: int, image_height: int) -> str:

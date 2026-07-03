@@ -98,6 +98,7 @@ def plot_ranked_examples(
     examples: Sequence[Mapping[str, Any]],
     title: str,
     class_names: Sequence[str] = CLASSES,
+    plot_width: float = 4.,
 ) -> Figure:
     """Plot scored predictions with ground-truth and predicted boxes.
 
@@ -120,7 +121,7 @@ def plot_ranked_examples(
         raise ValueError("At least one example is required")
     columns = ceil(sqrt(len(examples)))
     rows = ceil(len(examples) / columns)
-    figure = Figure(figsize=(5 * columns, 4 * rows))
+    figure = Figure(figsize=(plot_width * columns, 0.8 * rows * plot_width))
     FigureCanvasAgg(figure)
     axes = figure.subplots(rows, columns, squeeze=False)
     axes_list = list(axes.flat)
@@ -174,6 +175,7 @@ def plot_ranked_examples(
                 place_below=True,
             )
         axis.set_title(
+            f"{Path(item['image_path']).stem}\n"
             f"score={item['score']:.2f}, P={item['precision']:.2f}, "
             f"R={item['recall']:.2f}"
         )
